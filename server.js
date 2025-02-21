@@ -1,18 +1,25 @@
-const express = require("express");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const { spawn } = require("child_process");
+import { spawn } from "child_process";
+import express from "express";
+import fs from "fs";
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
+import "./config.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public'), {
-	setHeaders: (res, filePath) => {
-		res.setHeader("Cache-Control", "no-cache");
-	}
-}));
+app.use(
+	express.static(path.join(__dirname, "public"), {
+		setHeaders: (res, filePath) => {
+			res.setHeader("Cache-Control", "no-cache");
+		},
+	})
+);
 
 // Return 403 for any non-public file requests
 app.use((req, res, next) => {
