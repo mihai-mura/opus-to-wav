@@ -1,10 +1,13 @@
-import { spawn } from "child_process";
 import express from "express";
 import fs from "fs";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import "./config.js";
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,25 +58,25 @@ app.post("/convert", upload.single("opusFile"), async (req, res) => {
 		// Write the uploaded file to disk
 		fs.writeFileSync(tempInputPath, req.file.buffer);
 
-		// Convert using FFmpeg
-		const ffmpeg = spawn("ffmpeg", [
-			"-i",
-			tempInputPath,
-			"-c:a",
-			"pcm_s16le", // 16-bit PCM WAV
-			"-ar",
-			"8000", // Sample rate (8 KHz)
-			"-ac",
-			"1", // Mono channel
-			tempOutputPath,
-		]);
-
-		ffmpeg.stderr.on("data", data => {
-			console.log(`FFmpeg: ${data}`);
-		});
-
-		ffmpeg.on("close", code => {
-			if (code === 0) {
+		// Convert using fluent-ffmpeg
+		ffmpeg()
+			.input(tempInputPath)
+			.outputOptions([
+				'-c:a pcm_s16le', // 16-bit PCM WAV
+				'-ar 8000',      // Sample rate (8 KHz)
+				'-ac 1'          // Mono channel
+			])
+			.on('start', function(commandLine) {
+				console.log('FFmpeg started with command:', commandLine);
+			})
+			.on('error', function(err) {
+				console.error('FFmpeg error:', err);
+				// Clean up temporary files if they exist
+				if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+				if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
+				res.status(500).json({ error: 'Conversion failed' });
+			})
+			.on('end', function() {
 				// Read the converted file
 				const wavData = fs.readFileSync(tempOutputPath);
 
@@ -82,22 +85,11 @@ app.post("/convert", upload.single("opusFile"), async (req, res) => {
 				fs.unlinkSync(tempOutputPath);
 
 				// Send the WAV file
-				res.setHeader("Content-Type", "audio/wav");
-				res.setHeader("Content-Disposition", `attachment; filename="${req.file.originalname.replace(".opus", ".wav")}"`);
+				res.setHeader('Content-Type', 'audio/wav');
+				res.setHeader('Content-Disposition', `attachment; filename="${req.file.originalname.replace('.opus', '.wav')}"`);
 				res.send(wavData);
-			} else {
-				res.status(500).json({ error: "Conversion failed" });
-			}
-		});
-
-		ffmpeg.on("error", error => {
-			// Clean up temporary files if they exist
-			if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
-			if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
-
-			console.error("FFmpeg error:", error);
-			res.status(500).json({ error: "Conversion failed" });
-		});
+			})
+			.save(tempOutputPath);
 	} catch (error) {
 		console.error("Conversion error:", error);
 		res.status(500).json({ error: error.message });

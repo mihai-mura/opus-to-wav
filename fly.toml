@@ -2,8 +2,6 @@ app = "opus-to-wav"
 primary_region = "otp"
 
 [build]
-  builder = "heroku/buildpacks:20"
-  buildpacks = ["heroku/nodejs", "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"]
 
 [env]
   PORT = "8080"
